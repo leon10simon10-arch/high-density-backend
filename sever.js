@@ -1,23 +1,45 @@
 const express = require("express");
 const mongoose = require("mongoose");
-const axios = require("axios");
+const { Client, GatewayIntentBits } = require("discord.js");
 
 const app = express();
 app.use(express.json());
 
-// Connect to MongoDB Atlas
+// -----------------------------
+// Discord Bot Setup
+// -----------------------------
+const bot = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages
+  ]
+});
+
+bot.login(process.env.DISCORD_BOT_TOKEN);
+
+bot.once("ready", () => {
+  console.log("Discord bot online");
+});
+
+// -----------------------------
+// MongoDB Connection
+// -----------------------------
 mongoose.connect(process.env.MONGO_URL)
   .then(() => console.log("MongoDB connected"))
-  .catch(err => console.log(err));
+  .catch(err => console.log("MongoDB error:", err));
 
-// User model
+// -----------------------------
+// User Model
+// -----------------------------
 const User = mongoose.model("User", {
   username: String,
   password: String,
   createdAt: Number
 });
 
-// Signup endpoint
+// -----------------------------
+// Signup Endpoint
+// -----------------------------
 app.post("/signup", async (req, res) => {
   const { username, password } = req.body;
 
@@ -32,12 +54,26 @@ app.post("/signup", async (req, res) => {
 
   await user.save();
 
-  // Notify you (Discord webhook)
-  await axios.post(process.env.WEBHOOK_URL, {
-    content: `New signup: ${username}`
-  });
+  // Send Discord bot notification
+  const channel = bot.channels.cache.get(process.env.DISCORD_CHANNEL_ID);
+
+  if (channel) {
+    channel.send({
+      embeds: [
+        {
+          title: "New Signup",
+          description: `A new user just signed up!\n\n**Username:** ${username}`,
+          color: 0x00ff99,
+          timestamp: new Date().toISOString()
+        }
+      ]
+    });
+  }
 
   res.json({ success: true });
 });
 
+// -----------------------------
+// Start Server
+// -----------------------------
 app.listen(3000, () => console.log("Server running on port 3000"));
